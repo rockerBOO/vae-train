@@ -1,5 +1,7 @@
 # VAE Train
 
+[![.github/workflows/ci.yaml](https://github.com/rockerBOO/vae-train/actions/workflows/ci.yaml/badge.svg)](https://github.com/rockerBOO/vae-train/actions/workflows/ci.yaml)
+
 <!--toc:start-->
 - [VAE Train](#vae-train)
   - [Install](#install)
