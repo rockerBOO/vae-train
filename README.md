@@ -1,17 +1,18 @@
 # VAE Train
 
 <!--toc:start-->
-
 - [VAE Train](#vae-train)
   - [Install](#install)
   - [Usage](#usage)
     - [Advanced configuration](#advanced-configuration)
     - [GPU usage](#gpu-usage)
     - [Shell script](#shell-script)
+  - [FAQ](#faq)
+    - [NaN when running](#nan-when-running)
   - [Goals](#goals)
   - [Contribute](#contribute)
     - [Development](#development)
-
+  - [TODO](#todo)
 <!--toc:end-->
 
 Trainer using diffusers AutoencoderKL for training VAEs.
@@ -84,3 +85,11 @@ Looking for contributions to improve performance, more algorithms, interfaces, d
 
 - ruff (lint, format)
 - type-hinted
+
+## TODO
+
+- allow VRAM metrics usage printing to be toggleable
+- add evaluation/test performance metrics
+- add inference tool
+- add A/B diff evaluation
+- add LoRA/PEFT properly train, inference, and merging
