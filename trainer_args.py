@@ -85,11 +85,11 @@ def parse_args() -> TrainerArgs:
     parser.add_argument(
         "--dataset_name",
         type=str,
-        default="v-xchen-v/celebamask_hq",
+        default=None,
         help=(
             "The name of the Dataset (from the HuggingFace hub) to train on (could be your own, possibly private,"
             " dataset). It can also be a path pointing to a local copy of a dataset in your filesystem,"
-            " or to a folder containing files that 🤗 Datasets can understand."
+            " or to a folder containing files that 🤗 Datasets can understand. CelebHQ dataset example v-xchen-v/celebamask_hq"
         ),
     )
     parser.add_argument(
