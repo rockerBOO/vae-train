@@ -1,7 +1,23 @@
+#
+# Copyright 2024 Dave Lage
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 import logging
 import math
 import os
 
+from diffusers.models.modeling_utils import ModelMixin
 import lpips
 import numpy as np
 import torch
@@ -11,14 +27,16 @@ from PIL import Image
 from accelerate import Accelerator
 from accelerate.logging import get_logger
 from accelerate.utils import ProjectConfiguration, set_seed
-from datasets import load_dataset, DatasetDict
-from diffusers import AutoencoderKL
+from datasets import Dataset, DatasetDict, IterableDatasetDict, load_dataset
+from diffusers.models.autoencoders.autoencoder_kl import AutoencoderKL
 from diffusers.optimization import get_scheduler
 from diffusers.training_utils import EMAModel
-from diffusers.utils import is_wandb_available
-from diffusers.utils.import_utils import is_xformers_available
+from diffusers.utils.import_utils import is_xformers_available, is_wandb_available
 from packaging import version
-from peft import get_peft_model, LoraConfig
+from peft.mapping import get_peft_model
+from peft.tuners.lora.config import LoraConfig
+from torch.utils.data import DataLoader
+from torch.optim.adamw import AdamW
 from torchvision import transforms
 from tqdm import tqdm
 
@@ -32,13 +50,14 @@ logger = get_logger(__name__, log_level="INFO")
 def prepare_dataset(args: TrainerArgs, accelerator):
     # In distributed training, the load_dataset function guarantees that only one local process can concurrently
     # download the dataset.
-    if args.dataset_name is not None:
+    if args.dataset_name != "":
         # Downloading and loading a dataset from the hub.
         dataset = load_dataset(
             args.dataset_name,
             args.dataset_config_name,
             cache_dir=args.cache_dir,
         )
+
     else:
         data_files = {}
         if args.train_data_dir is not None:
@@ -49,8 +68,16 @@ def prepare_dataset(args: TrainerArgs, accelerator):
             cache_dir=args.cache_dir,
         )
 
-    column_names = dataset["train"].column_names
-    if args.image_column is None:
+    assert isinstance(dataset, IterableDatasetDict) or isinstance(dataset, DatasetDict)
+
+    train_dataset = dataset["train"]
+
+    assert isinstance(train_dataset, Dataset)
+
+    column_names = train_dataset.column_names
+    assert type(column_names) is list and len(column_names) > 0
+
+    if args.image_column == "":
         image_column = column_names[0]
     else:
         image_column = args.image_column
@@ -82,19 +109,24 @@ def prepare_dataset(args: TrainerArgs, accelerator):
 
     with accelerator.main_process_first():
         # Load test data from test_data_dir
-        if args.test_data_dir is not None and args.train_data_dir is not None:
+        if args.test_data_dir is not None and args.train_data_dir is not None: 
             logger.info(f"load test data from {args.test_data_dir}")
             test_dir = os.path.join(args.test_data_dir, "**")
-            test_dataset: DatasetDict = load_dataset(
+            test_dataset = load_dataset(
                 "imagefolder",
                 data_files=test_dir,
                 cache_dir=args.cache_dir,
             )
+
+            assert isinstance(test_dataset, DatasetDict) or isinstance(
+                test_dataset, IterableDatasetDict
+            )
+
             # Set the training transforms
             train_dataset = dataset["train"].with_transform(preprocess)
             test_dataset = test_dataset["train"].with_transform(preprocess)
         # Load train/test data from train_data_dir
-        elif "test" in dataset.keys():
+        elif isinstance(dataset, IterableDatasetDict) and "test" in dataset.keys():
             train_dataset = dataset["train"].with_transform(preprocess)
             test_dataset = dataset["test"].with_transform(preprocess)
         # Split into train/test
@@ -109,17 +141,22 @@ def prepare_dataset(args: TrainerArgs, accelerator):
         pixel_values = pixel_values.to(memory_format=torch.contiguous_format).float()
         return {"pixel_values": pixel_values}
 
+    # Convert the dataset to torch specific for DataLoader
+    # Then we ignore the type. Maybe the type could be better inferred.
+    # train_dataset = train_dataset.with_format("torch")
+    # test_dataset = test_dataset.with_format("torch")
+
     # DataLoaders creation:
-    train_dataloader = torch.utils.data.DataLoader(
-        train_dataset,
+    train_dataloader = DataLoader(
+        train_dataset,  # type: ignore[arg-type]
         shuffle=True,
         collate_fn=collate_fn,
         batch_size=args.train_batch_size,
         num_workers=args.train_batch_size * accelerator.num_processes,
     )
 
-    test_dataloader = torch.utils.data.DataLoader(
-        test_dataset,
+    test_dataloader = DataLoader(
+        test_dataset,  # type: ignore[arg-type]
         shuffle=False,
         collate_fn=collate_fn,
         batch_size=args.train_batch_size,
@@ -127,7 +164,10 @@ def prepare_dataset(args: TrainerArgs, accelerator):
         or args.train_batch_size * accelerator.num_processes,
     )
 
-    return train_dataloader, test_dataloader, len(train_dataset), len(test_dataset)
+    assert hasattr(train_dataset, "__len__")
+    assert hasattr(test_dataset, "__len__")
+
+    return train_dataloader, test_dataloader, len(train_dataset), len(test_dataset)  # type: ignore[arg-type]
 
 
 # https://github.com/kukaiN/vae_finetune/blob/main/vae_finetune.py
@@ -175,18 +215,23 @@ def patch_based_lpips_loss(
 
 
 @torch.no_grad()
-def log_validation(args, repo_id, test_dataloader, vae, accelerator, epoch):
+def log_validation(args, repo_id, test_dataloader: DataLoader, vae, accelerator, epoch):
     logger.info("Running validation... ")
 
     vae_model = accelerator.unwrap_model(vae)
+
+    assert isinstance(vae_model, AutoencoderKL)
     images = []
 
     for _, sample in enumerate(test_dataloader):
         x = sample["pixel_values"]
+
+        assert isinstance(x, torch.Tensor)
+
         reconstructions = vae_model(x).sample
-        images.append(
-            torch.cat([sample["pixel_values"].cpu(), reconstructions.cpu()], axis=0)
-        )
+
+        assert isinstance(reconstructions, torch.Tensor)
+        images.append(torch.cat([x.cpu(), reconstructions.cpu()]))
 
     for tracker in accelerator.trackers:
         if tracker.name == "tensorboard":
@@ -206,7 +251,7 @@ def log_validation(args, repo_id, test_dataloader, vae, accelerator, epoch):
                 }
             )
         else:
-            logger.warn(f"image logging not implemented for {tracker.gen_images}")
+            logger.warning(f"image logging not implemented for {tracker.gen_images}")
 
     if repo_id is not None and repo_id != "":
         save_model_card(args, repo_id, images, repo_folder=repo_id)
@@ -223,6 +268,9 @@ def make_image_grid(imgs, rows, cols):
 
 def save_model_card(args, repo_id: str, images=None, repo_folder=None):
     img_str = ""
+    if images is None or repo_folder is None:
+        return
+
     if len(images) > 0:
         image_grid = make_image_grid(images, 1, "example")
         image_grid.save(os.path.join(repo_folder, "val_imgs_grid.png"))
@@ -259,10 +307,11 @@ These are the key hyperparameters used during training:
 
 """
     wandb_info = ""
+    wandb_run_url = None
+
     if is_wandb_available():
         import wandb
 
-        wandb_run_url = None
         if wandb.run is not None:
             wandb_run_url = wandb.run.url
 
@@ -283,8 +332,8 @@ def train_step(
     batch: dict[str, torch.Tensor],
     accelerator: Accelerator,
     vae: AutoencoderKL,
-    mut_train_loss: torch.Tensor,
-) -> dict[str, torch.Tensor]:
+    mut_train_loss: float | None,
+) -> tuple[torch.Tensor, dict[str, float]]:
     target = batch["pixel_values"]
 
     # https://github.com/huggingface/diffusers/blob/main/src/diffusers/models/autoencoder_kl.py
@@ -293,13 +342,15 @@ def train_step(
         z = posterior.sample()
         pred = vae.module.decode(z).sample
     else:
-        posterior = vae.encode(target).latent_dist
+        encoding = vae.encode(target)
+        posterior = encoding.latent_dist  # type: ignore[arg-type]
         # z = mean                      if posterior.mode()
         # z = mean + variable*epsilon   if posterior.sample()
         z = posterior.sample()  # Not mode()
-        pred = vae.decode(z).sample
+        decoding = vae.decode(z)
 
-    # pred = pred#.to(dtype=weight_dtype)
+        pred = decoding.sample  # type: ignore[arg-type]
+
     kl_loss = posterior.kl().mean()
 
     mse_loss = F.mse_loss(pred.float(), batch["pixel_values"].float(), reduction="mean")
@@ -332,13 +383,30 @@ def train_step(
     else:
         loss = mse_loss + args.lpips_scale * lpips_loss + args.kl_scale * kl_loss
 
-    avg_loss = accelerator.gather(loss.repeat(args.train_batch_size)).mean()
-    mut_train_loss += avg_loss.item() / args.gradient_accumulation_steps
+    gathered = accelerator.gather(loss.repeat(args.train_batch_size))
+
+    assert isinstance(gathered, torch.Tensor)
+
+    avg_loss = gathered.mean()
+    if mut_train_loss is not None:
+        mut_train_loss += avg_loss.item() / args.gradient_accumulation_steps
+    else:
+        mut_train_loss = avg_loss.item() / args.gradient_accumulation_steps
+
+    assert isinstance(loss, torch.Tensor)
+
+    mse_loss = mse_loss.detach().item()
+    lpips_loss = lpips_loss.detach().item()
+    kl_loss = kl_loss.detach().item()
+
+    assert type(mse_loss) is float
+    assert type(lpips_loss) is float
+    assert type(kl_loss) is float
 
     return loss, {
-        "mse": mse_loss.detach().item(),
-        "lpips": lpips_loss.detach().item(),
-        "kl": kl_loss.detach().item(),
+        "mse": mse_loss,
+        "lpips": lpips_loss,
+        "kl": kl_loss,
     }
 
 
@@ -371,12 +439,15 @@ def main():
     if args.seed is not None:
         set_seed(args.seed)
 
-        # Load vae
-    vae: AutoencoderKL = AutoencoderKL.from_pretrained(
+    # Load vae
+    vae = AutoencoderKL.from_pretrained(
         args.pretrained_model_name_or_path,
         # subfolder="vae",
         revision=args.revision,
     )
+
+    assert isinstance(vae, AutoencoderKL)
+
     ema_vae: EMAModel = EMAModel(
         vae.parameters(), model_cls=AutoencoderKL, model_config=vae.config
     )
@@ -396,6 +467,7 @@ def main():
             lora_dropout=0.1,
             use_rslora=True,
         )
+        assert isinstance(vae, ModelMixin)
         vae = get_peft_model(vae, peft_config)
         vae.print_trainable_parameters()
 
@@ -443,7 +515,7 @@ def main():
 
         optimizer_cls = bnb.optim.AdamW8bit
     else:
-        optimizer_cls = torch.optim.AdamW
+        optimizer_cls = AdamW
 
     vae.train()
 
@@ -501,8 +573,8 @@ def main():
         assert isinstance(vae.model, AutoencoderKL)
     else:
         assert isinstance(vae, AutoencoderKL)
-    assert isinstance(train_dataloader, torch.utils.data.DataLoader)
-    assert isinstance(test_dataloader, torch.utils.data.DataLoader)
+    assert isinstance(train_dataloader, DataLoader)
+    assert isinstance(test_dataloader, DataLoader)
 
     # The trackers initializes automatically on the main process.
     if accelerator.is_main_process:
@@ -541,7 +613,7 @@ def main():
     )
     progress_bar.set_description("Steps")
 
-    train_loss = 0.0
+    train_loss: float | None = None
 
     with accelerator.autocast():
         for epoch in range(first_epoch, args.num_train_epochs):

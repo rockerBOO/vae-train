@@ -36,8 +36,15 @@ jobs:
         run: uv sync --all-extras --dev
 
       - name: Run tests
-        # For example, using `pytest`
         run: uv run pytest tests
+
+      - name: Pyright
+        run: uv tool run pyright
+
+      # Might not be needed.
+      # - uses: jakebailey/pyright-action@v2
+      #   with:
+      #     version: 1.1.311
 
       - name: Minimize uv cache
         run: uv cache prune --ci

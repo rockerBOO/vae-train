@@ -21,7 +21,7 @@ def test_trainer_args_with_dataset_name():
         args = parse_args()
         assert isinstance(args, TrainerArgs)
         assert args.dataset_name == "test_dataset"
-        assert args.train_data_dir is None
+        assert args.train_data_dir is None 
         assert args.train_batch_size == 1
         assert args.learning_rate == 1.5e-7
         assert args.resolution == 512

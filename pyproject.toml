@@ -31,9 +31,24 @@ xformers = [
     "xformers>=0.0.27.post2",
 ]
 
+[tool.ruff]
+line-length = 88
+indent-width = 4
+
+[tool.ruff.lint]
+ignore = ["E501"]
+
+[language-server.ruff.config.lint]
+line-length = 88
+select = ["E", "F"]
+
 [dependency-groups]
 dev = [
     "pytest>=8.3.3",
     "setuptools>=75.3.0",
 ]
+
+[tool.pyright]
+venvPath = "."
+venv = ".venv"
 

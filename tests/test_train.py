@@ -1,15 +1,15 @@
 import pytest
 import torch
+from torch.utils.data import DataLoader
 from accelerate import Accelerator
 from unittest.mock import Mock, patch
-from diffusers import AutoencoderKL
+from diffusers.models.autoencoders.autoencoder_kl import AutoencoderKL
 from train import (
     extract_patches,
     patch_based_mse_loss,
     patch_based_lpips_loss,
     train_step,
     prepare_dataset,
-    memory_usage_metrics,
 )
 from vae_train.trainer_args import TrainerArgs
 
@@ -29,6 +29,7 @@ def mock_args():
     args.dataset_name = "v-xchen-v/celebamask_hq"
     args.dataset_config_name = ""
     args.cache_dir = "/tmp/x-s92-vae-train"
+    args.train_data_dir = ""
     args.test_samples = 2
     args.image_column = "image"
     args.test_data_dir = None
@@ -87,7 +88,7 @@ def test_train_step(mock_lpips, mock_args, mock_batch, mock_vae):
     mock_lpips_fn = Mock()
     mock_lpips_fn.return_value = torch.tensor([0.1])
 
-    train_loss = torch.tensor(0.0)
+    train_loss = 0.0
 
     loss, meta_loss = train_step(
         mock_args, mock_lpips_fn, mock_batch, accelerator, mock_vae, train_loss
@@ -108,14 +109,14 @@ def test_prepare_dataset(mock_load_dataset, mock_args):
     mock_dataset = {
         "train": Mock(
             column_names=["image"],
-            train_test_split=lambda test_size: Mock(
+            train_test_split=lambda: Mock(
                 train=Mock(
-                    with_transform=lambda x: [
+                    with_transform=lambda: [
                         {"pixel_values": torch.randn(3, 64, 64)} for _ in range(5)
                     ]
                 ),
                 test=Mock(
-                    with_transform=lambda x: [
+                    with_transform=lambda: [
                         {"pixel_values": torch.randn(3, 64, 64)} for _ in range(2)
                     ]
                 ),
@@ -128,8 +129,8 @@ def test_prepare_dataset(mock_load_dataset, mock_args):
         mock_args, accelerator
     )
 
-    assert isinstance(train_dataloader, torch.utils.data.DataLoader)
-    assert isinstance(test_dataloader, torch.utils.data.DataLoader)
+    assert isinstance(train_dataloader, DataLoader)
+    assert isinstance(test_dataloader, DataLoader)
     assert train_len > 0
     assert test_len > 0
 
@@ -156,7 +157,7 @@ def test_train_step_decoder_only(train_only_decoder, mock_args, mock_batch, mock
     mock_lpips_fn = Mock()
     mock_lpips_fn.return_value = torch.tensor([0.1])
 
-    train_loss = torch.tensor(0.0)
+    train_loss = 0.0
 
     loss, meta_loss = train_step(
         mock_args, mock_lpips_fn, mock_batch, accelerator, mock_vae, train_loss
