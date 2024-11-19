@@ -1,16 +1,17 @@
-import dataclasses
+from dataclasses import dataclass
 import argparse
+from typing import Optional
 
 
-@dataclasses.dataclass
+@dataclass
 class TrainerArgs:
     pretrained_model_name_or_path: str
     subfolder: str
     revision: str
     dataset_name: str
     dataset_config_name: str
-    train_data_dir: str
-    test_data_dir: str
+    train_data_dir: Optional[str]
+    test_data_dir: Optional[str]
     image_column: str
     output_dir: str
     huggingface_repo: str
@@ -31,7 +32,8 @@ class TrainerArgs:
     checkpointing_steps: int
     checkpoints_total_limit: int
     resume_from_checkpoint: str
-    test_samples: int
+    max_train_steps: int
+    test_samples: Optional[int]
     validation_epochs: int
     tracker_project_name: str
     use_8bit_adam: bool
@@ -401,6 +403,10 @@ def parse_args() -> TrainerArgs:
         "--repo_id",
         type=str,
         help="Repo ID on HuggingFace ",
+    )
+
+    parser.add_argument(
+        "--max_train_steps", type=int, default=None, help="Max training steps"
     )
 
     args: TrainerArgs = TrainerArgs(**vars(parser.parse_args()))

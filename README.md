@@ -86,7 +86,7 @@ Looking for contributions to improve performance, more algorithms, interfaces, d
 ### Development
 
 - ruff (lint, format)
-- type-hinted
+- Pyright type checking
 
 ## TODO
 
