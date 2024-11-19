@@ -48,7 +48,7 @@ class TorchTracemalloc:
             if not self.peak_monitoring:
                 break
 
-    def __exit__(self):
+    def __exit__(self, *exc):
         self.peak_monitoring = False
 
         gc.collect()

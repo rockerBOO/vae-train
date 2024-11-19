@@ -467,8 +467,11 @@ def main():
             lora_dropout=0.1,
             use_rslora=True,
         )
+
         assert isinstance(vae, ModelMixin)
-        vae = get_peft_model(vae, peft_config)
+        # We ensure that vae is valid to be used with get_peft_model. 
+        # Requires PreTrainedModel and AutoencoderKL does not use it
+        vae = get_peft_model(vae, peft_config) # type: ignore[arg-type]
         vae.print_trainable_parameters()
 
     if args.gradient_checkpointing:
