@@ -43,7 +43,7 @@ jobs:
         run: uv run pytest tests
 
       - name: Pyright
-        run: uv tool run pyright
+        run: uv tool run pyright --timeout 150
 
       # Might not be needed.
       # - uses: jakebailey/pyright-action@v2
