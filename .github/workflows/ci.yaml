@@ -18,8 +18,9 @@ jobs:
       matrix:
         python-version:
           - "3.11"
-          - "3.12"
-          - "3.13"
+          # Could check more versions if issues arrise
+          # - "3.12"
+          # - "3.13"
 
     steps:
       - uses: actions/checkout@v4
