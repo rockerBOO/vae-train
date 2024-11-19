@@ -657,6 +657,15 @@ wheels = [
 ]
 
 [[package]]
+name = "nodeenv"
+version = "1.9.1"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/43/16/fc88b08840de0e0a72a2f9d8c6bae36be573e475a6326ae854bcc549fc45/nodeenv-1.9.1.tar.gz", hash = "sha256:6ec12890a2dab7946721edbfbcd91f3319c6ccc9aec47be7c7e6b7011ee6645f", size = 47437 }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/d2/1d/1b658dbd2b9fa9c4c9f32accbfc0205d532c8c6194dc0f2a4c0428e7128a/nodeenv-1.9.1-py2.py3-none-any.whl", hash = "sha256:ba11c9782d29c27c70ffbdda2d7415098754709be8a7056d79a737cd901155c9", size = 22314 },
+]
+
+[[package]]
 name = "numpy"
 version = "1.26.4"
 source = { registry = "https://pypi.org/simple" }
@@ -1049,6 +1058,19 @@ wheels = [
 ]
 
 [[package]]
+name = "pyright"
+version = "1.1.389"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "nodeenv" },
+    { name = "typing-extensions" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/72/4e/9a5ab8745e7606b88c2c7ca223449ac9d82a71fd5e31df47b453f2cb39a1/pyright-1.1.389.tar.gz", hash = "sha256:716bf8cc174ab8b4dcf6828c3298cac05c5ed775dda9910106a5dcfe4c7fe220", size = 21940 }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/1b/26/c288cabf8cfc5a27e1aa9e5029b7682c0f920b8074f45d22bf844314d66a/pyright-1.1.389-py3-none-any.whl", hash = "sha256:41e9620bba9254406dc1f621a88ceab5a88af4c826feb4f614d95691ed243a60", size = 18581 },
+]
+
+[[package]]
 name = "pytest"
 version = "8.3.3"
 source = { registry = "https://pypi.org/simple" }
@@ -1061,6 +1083,18 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/8b/6c/62bbd536103af674e227c41a8f3dcd022d591f6eed5facb5a0f31ee33bbc/pytest-8.3.3.tar.gz", hash = "sha256:70b98107bd648308a7952b06e6ca9a50bc660be218d53c257cc1fc94fda10181", size = 1442487 }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/6b/77/7440a06a8ead44c7757a64362dd22df5760f9b12dc5f11b6188cd2fc27a0/pytest-8.3.3-py3-none-any.whl", hash = "sha256:a6853c7375b2663155079443d2e45de913a911a11d669df02a50814944db57b2", size = 342341 },
+]
+
+[[package]]
+name = "pytest-timeout"
+version = "2.3.1"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "pytest" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/93/0d/04719abc7a4bdb3a7a1f968f24b0f5253d698c9cc94975330e9d3145befb/pytest-timeout-2.3.1.tar.gz", hash = "sha256:12397729125c6ecbdaca01035b9e5239d4db97352320af155b3f5de1ba5165d9", size = 17697 }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/03/27/14af9ef8321f5edc7527e47def2a21d8118c6f329a9342cc61387a0c0599/pytest_timeout-2.3.1-py3-none-any.whl", hash = "sha256:68188cb703edfc6a18fad98dc25a3c61e9f24d644b0b70f33af545219fc7813e", size = 14148 },
 ]
 
 [[package]]
@@ -1548,7 +1582,6 @@ version = "0.1.0"
 source = { virtual = "." }
 dependencies = [
     { name = "accelerate" },
-    { name = "came-pytorch" },
     { name = "datasets" },
     { name = "diffusers" },
     { name = "lpips" },
@@ -1561,33 +1594,44 @@ dependencies = [
 [package.optional-dependencies]
 bitsandbytes = [
     { name = "bitsandbytes" },
+    { name = "setuptools" },
+]
+came-optimizer = [
+    { name = "came-pytorch" },
 ]
 tensorboard = [
     { name = "tensorboard" },
+]
+types = [
+    { name = "pyright" },
 ]
 wandb = [
     { name = "wandb" },
 ]
 xformers = [
+    { name = "setuptools" },
     { name = "xformers" },
 ]
 
 [package.dev-dependencies]
 dev = [
     { name = "pytest" },
-    { name = "setuptools" },
+    { name = "pytest-timeout" },
 ]
 
 [package.metadata]
 requires-dist = [
     { name = "accelerate", specifier = ">=1.0.1" },
     { name = "bitsandbytes", marker = "extra == 'bitsandbytes'", specifier = ">=0.44.1" },
-    { name = "came-pytorch", specifier = ">=0.1.3" },
+    { name = "came-pytorch", marker = "extra == 'came-optimizer'", specifier = ">=0.1.3" },
     { name = "datasets", specifier = ">=3.0.2" },
     { name = "diffusers", specifier = ">=0.31.0" },
     { name = "lpips", specifier = ">=0.1.4" },
     { name = "peft", specifier = ">=0.13.2" },
     { name = "psutil", specifier = ">=6.1.0" },
+    { name = "pyright", marker = "extra == 'types'", specifier = "==1.1.389" },
+    { name = "setuptools", marker = "extra == 'bitsandbytes'", specifier = ">=75.3.0" },
+    { name = "setuptools", marker = "extra == 'xformers'", specifier = ">=75.3.0" },
     { name = "tensorboard", marker = "extra == 'tensorboard'", specifier = ">=2.18.0" },
     { name = "torch", specifier = "==2.4" },
     { name = "torchvision", specifier = ">=0.19.0" },
@@ -1598,7 +1642,7 @@ requires-dist = [
 [package.metadata.requires-dev]
 dev = [
     { name = "pytest", specifier = ">=8.3.3" },
-    { name = "setuptools", specifier = ">=75.3.0" },
+    { name = "pytest-timeout", specifier = ">=2.3.1" },
 ]
 
 [[package]]
